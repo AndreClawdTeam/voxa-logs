@@ -93,10 +93,11 @@
     padding: 5px 10px;
     font-family: inherit;
     font-size: 12px;
-    width: 220px;
     outline: none;
     transition: border-color 0.2s;
   }
+  input[type="password"] { width: 220px; }
+  input[type="text"] { width: 200px; }
   input:focus { border-color: var(--info); }
 
   button {
@@ -140,6 +141,22 @@
     border-radius: 4px;
   }
   .filter-btn.active-filter { background: #1f6feb22; border-color: var(--info); color: var(--info); }
+
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .search-wrap label {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+  #search-input {
+    width: 200px;
+    padding: 3px 10px;
+    font-size: 11px;
+  }
 
   .counter {
     margin-left: auto;
@@ -231,13 +248,125 @@
   .status-4xx { background: #f0883e22; color: var(--orange); border: 1px solid #f0883e44; }
   .status-5xx { background: #f8514922; color: var(--error); border: 1px solid #f8514944; }
 
-  .resp-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
-  .resp-time.slow { color: var(--warn); }
+  .resp-time { font-size: 11px; white-space: nowrap; }
+  .resp-time.fast      { color: var(--green); }
+  .resp-time.medium    { color: var(--warn); }
+  .resp-time.slow      { color: var(--orange); }
   .resp-time.very-slow { color: var(--error); }
+  .resp-time.unknown   { color: var(--text-muted); }
 
   .msg { color: var(--text); flex: 1; word-break: break-word; }
   .msg.raw { color: var(--text-muted); font-style: italic; }
   .msg.system { color: var(--green); }
+
+  .req-id-tag {
+    font-size: 10px;
+    color: var(--text-muted);
+    background: #21262d;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+    white-space: nowrap;
+  }
+  .remote-addr {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* ─── Error block ─────────────────────────────────────────────────── */
+  .error-block {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 20px 10px;
+    border-left: 3px solid var(--error);
+    background: #1a0a0a;
+    border-bottom: 1px solid #f8514922;
+  }
+
+  .err-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .err-type {
+    color: var(--orange);
+    font-weight: 700;
+    font-size: 12px;
+  }
+
+  .err-message {
+    color: #ff9999;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+    margin-top: 2px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .stack-section {
+    margin-top: 6px;
+  }
+
+  .stack-toggle {
+    background: none;
+    border: 1px solid #f8514944;
+    color: var(--error);
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .stack-toggle:hover { background: #f8514911; border: 1px solid #f8514977; }
+
+  .stack-trace {
+    display: none;
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: #0d0d0d;
+    border: 1px solid #f8514933;
+    border-radius: 4px;
+    font-size: 11px;
+    color: #ff8080;
+    white-space: pre;
+    overflow-x: auto;
+    line-height: 1.6;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+  .stack-trace.open { display: block; }
+
+  .copy-btn {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    padding: 2px 8px;
+    font-size: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .copy-btn:hover { border-color: var(--info); color: var(--info); }
+
+  .req-detail {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ─── Search highlight ─────────────────────────────────────────────── */
+  mark {
+    background: #e3b34144;
+    color: var(--warn);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
 
   /* ─── Empty state ─────────────────────────────────────────────────── */
   #empty-state {
@@ -277,6 +406,10 @@
     <button class="filter-btn" data-filter="error" onclick="setFilter('error')">Error</button>
     <button class="filter-btn" data-filter="debug" onclick="setFilter('debug')">Debug</button>
   </div>
+  <div class="search-wrap">
+    <label for="search-input">🔍</label>
+    <input type="text" id="search-input" placeholder="Filter logs…" autocomplete="off" />
+  </div>
   <button class="filter-btn" id="autoscroll-btn" onclick="toggleAutoScroll()">↓ Auto-scroll ON</button>
   <div class="counter" id="counter">0 entries</div>
 </div>
@@ -294,6 +427,7 @@
   let evtSource = null;
   let autoScroll = true;
   let currentFilter = 'all';
+  let currentSearch = '';
   let totalCount = 0;
   let reconnectDelay = 1000;
   let reconnectTimer = null;
@@ -307,6 +441,7 @@
   const statusBadge = document.getElementById('status-badge');
   const statusText = document.getElementById('status-text');
   const counterEl = document.getElementById('counter');
+  const searchInput = document.getElementById('search-input');
 
   // Load saved token
   const savedToken = localStorage.getItem('voxa-logs-token');
@@ -315,7 +450,7 @@
   // ─── Connect / Disconnect ─────────────────────────────────────────────
   function toggleConnect() {
     if (connected || evtSource) {
-      disconnect(false); // manual disconnect — no reconnect
+      disconnect(false);
     } else {
       connect();
     }
@@ -352,7 +487,6 @@
       connectBtn.textContent = 'Connect';
       connectBtn.className = 'primary';
 
-      // Reconnect with backoff
       const delay = reconnectDelay;
       reconnectDelay = Math.min(reconnectDelay * 2, 30000);
       statusText.textContent = `Reconnecting in ${delay / 1000}s…`;
@@ -408,15 +542,27 @@
         level: pinoLevelToStr(log.level),
         time: new Date(log.time),
         msg: log.msg,
-        method: log.req?.method,
-        url: log.req?.url,
-        status: log.res?.statusCode,
-        responseTime: log.responseTime,
-        pid: log.pid,
+        // HTTP
+        reqId:         log.req?.id,
+        method:        log.req?.method,
+        url:           log.req?.url,
+        remoteAddress: log.req?.remoteAddress,
+        status:        log.res?.statusCode,
+        responseTime:  log.responseTime,
+        // Error fields — previously ignored
+        err: log.err ? {
+          type:    log.err.type,
+          message: log.err.message,
+          stack:   log.err.stack,
+        } : null,
+        // Meta
+        pid:      log.pid,
         hostname: log.hostname,
+        // Full raw JSON for copy
+        _raw: log,
       };
     } catch {
-      return { type: 'raw', msg: raw, time: new Date(), level: 'info' };
+      return { type: 'raw', msg: raw, time: new Date(), level: 'info', _raw: null };
     }
   }
 
@@ -434,10 +580,11 @@
   }
 
   function rtClass(ms) {
-    if (!ms) return '';
-    if (ms > 2000) return 'very-slow';
-    if (ms > 500) return 'slow';
-    return '';
+    if (ms === undefined || ms === null) return 'unknown';
+    if (ms < 100)  return 'fast';
+    if (ms < 500)  return 'medium';
+    if (ms < 2000) return 'slow';
+    return 'very-slow';
   }
 
   // ─── Rendering ────────────────────────────────────────────────────────
@@ -448,7 +595,7 @@
     renderEntry(parsed);
   }
 
-  function renderEntry(parsed) {
+  function createSummaryRow(parsed) {
     const entry = document.createElement('div');
     entry.className = `log-entry level-${parsed.level}`;
     entry.dataset.level = parsed.level;
@@ -500,6 +647,20 @@
       entry.appendChild(rt);
     }
 
+    if (parsed.type === 'pino' && parsed.reqId) {
+      const reqId = document.createElement('span');
+      reqId.className = 'req-id-tag';
+      reqId.textContent = `req#${parsed.reqId}`;
+      entry.appendChild(reqId);
+    }
+
+    if (parsed.type === 'pino' && parsed.remoteAddress) {
+      const addr = document.createElement('span');
+      addr.className = 'remote-addr';
+      addr.textContent = parsed.remoteAddress.replace('::ffff:', '');
+      entry.appendChild(addr);
+    }
+
     const msg = document.createElement('span');
     if (parsed.type === 'raw') msg.className = 'msg raw';
     else if (parsed.type === 'system') msg.className = 'msg system';
@@ -507,7 +668,122 @@
     msg.textContent = parsed.msg || '';
     entry.appendChild(msg);
 
+    return entry;
+  }
+
+  function createErrorBlock(parsed) {
+    const block = document.createElement('div');
+    block.className = 'error-block';
+    block.dataset.level = parsed.level;
+
+    // Apply filter visibility
+    if (currentFilter !== 'all' && parsed.level !== currentFilter) {
+      block.style.display = 'none';
+    }
+
+    // Header: err.type + req# + IP + copy button
+    const header = document.createElement('div');
+    header.className = 'err-header';
+
+    if (parsed.err.type) {
+      const errType = document.createElement('span');
+      errType.className = 'err-type';
+      errType.textContent = parsed.err.type;
+      header.appendChild(errType);
+    }
+
+    if (parsed.reqId) {
+      const reqId = document.createElement('span');
+      reqId.className = 'req-detail';
+      reqId.textContent = `req#${parsed.reqId}`;
+      header.appendChild(reqId);
+    }
+
+    if (parsed.remoteAddress) {
+      const addr = document.createElement('span');
+      addr.className = 'req-detail';
+      addr.textContent = parsed.remoteAddress.replace('::ffff:', '');
+      header.appendChild(addr);
+    }
+
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-btn';
+    copyBtn.textContent = 'Copy JSON';
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(JSON.stringify(parsed._raw, null, 2)).then(() => {
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy JSON'; }, 1500);
+      }).catch(() => {
+        // Fallback for non-HTTPS
+        const ta = document.createElement('textarea');
+        ta.value = JSON.stringify(parsed._raw, null, 2);
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        copyBtn.textContent = 'Copied!';
+        setTimeout(() => { copyBtn.textContent = 'Copy JSON'; }, 1500);
+      });
+    };
+    header.appendChild(copyBtn);
+    block.appendChild(header);
+
+    // Full error message
+    if (parsed.err.message) {
+      const errMsg = document.createElement('div');
+      errMsg.className = 'err-message';
+      errMsg.textContent = parsed.err.message;
+      block.appendChild(errMsg);
+    }
+
+    // Collapsible stack trace
+    if (parsed.err.stack) {
+      const stackSection = document.createElement('div');
+      stackSection.className = 'stack-section';
+
+      const toggle = document.createElement('button');
+      toggle.className = 'stack-toggle';
+      toggle.textContent = '▶ Stack trace';
+
+      const stackEl = document.createElement('pre');
+      stackEl.className = 'stack-trace';
+      stackEl.textContent = parsed.err.stack;
+
+      toggle.onclick = () => {
+        // Pause auto-scroll during expansion to avoid jump
+        const wasAutoScroll = autoScroll;
+        autoScroll = false;
+        const isOpen = stackEl.classList.toggle('open');
+        toggle.textContent = isOpen ? '▼ Stack trace' : '▶ Stack trace';
+        // Restore after layout settles
+        setTimeout(() => { autoScroll = wasAutoScroll; }, 100);
+      };
+
+      stackSection.appendChild(toggle);
+      stackSection.appendChild(stackEl);
+      block.appendChild(stackSection);
+    }
+
+    return block;
+  }
+
+  function renderEntry(parsed) {
+    const hasError = (parsed.level === 'error' || parsed.level === 'fatal') && parsed.err;
+
+    const entry = createSummaryRow(parsed);
     logContainer.appendChild(entry);
+
+    let errorBlock = null;
+    if (hasError) {
+      errorBlock = createErrorBlock(parsed);
+      logContainer.appendChild(errorBlock);
+    }
+
+    // Apply search filter to newly added elements
+    if (currentSearch) {
+      applySearchToElement(entry, currentSearch);
+      if (errorBlock) applySearchToElement(errorBlock, currentSearch);
+    }
 
     if (autoScroll) {
       logContainer.scrollTop = logContainer.scrollHeight;
@@ -518,27 +794,57 @@
     renderEntry({ type: 'system', msg: text, level: 'info', time: new Date() });
   }
 
-  // ─── Controls ─────────────────────────────────────────────────────────
-  function clearLogs() {
-    logContainer.innerHTML = '';
-    if (!connected) {
-      logContainer.innerHTML = '<div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#8b949e"><div style="font-size:48px;opacity:.4">📋</div><p>Enter your token and click <strong>Connect</strong> to stream logs</p></div>';
+  // ─── Search / Filter ──────────────────────────────────────────────────
+  function applySearchToElement(el, query) {
+    if (!query) {
+      el.style.display = '';
+      return;
     }
-    totalCount = 0;
-    updateCounter();
+    const text = el.textContent.toLowerCase();
+    const visible = text.includes(query);
+    // Only override display if filter allows it
+    if (!visible) {
+      el.style.display = 'none';
+    } else if (el.style.display === 'none') {
+      // If filter would hide it (data-level mismatch), keep hidden; otherwise show
+      const level = el.dataset.level;
+      if (currentFilter === 'all' || !level || level === currentFilter) {
+        el.style.display = '';
+      }
+    }
   }
 
+  searchInput.addEventListener('input', (e) => {
+    currentSearch = e.target.value.toLowerCase().trim();
+    document.querySelectorAll('.log-entry, .error-block').forEach(el => {
+      const level = el.dataset.level;
+      const levelOk = currentFilter === 'all' || !level || level === currentFilter;
+
+      if (!currentSearch) {
+        el.style.display = levelOk ? '' : 'none';
+      } else {
+        const text = el.textContent.toLowerCase();
+        el.style.display = (levelOk && text.includes(currentSearch)) ? '' : 'none';
+      }
+    });
+  });
+
+  // ─── Level filter ─────────────────────────────────────────────────────
   function setFilter(filter) {
     currentFilter = filter;
     document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
       btn.classList.toggle('active-filter', btn.dataset.filter === filter);
     });
-    // Re-apply visibility to existing entries
-    document.querySelectorAll('.log-entry').forEach(el => {
-      if (filter === 'all' || el.dataset.level === filter) {
-        el.style.display = '';
-      } else {
+    document.querySelectorAll('.log-entry, .error-block').forEach(el => {
+      const level = el.dataset.level;
+      const levelOk = filter === 'all' || !level || level === filter;
+      if (!levelOk) {
         el.style.display = 'none';
+      } else if (currentSearch) {
+        const text = el.textContent.toLowerCase();
+        el.style.display = text.includes(currentSearch) ? '' : 'none';
+      } else {
+        el.style.display = '';
       }
     });
   }
@@ -551,16 +857,24 @@
     if (autoScroll) logContainer.scrollTop = logContainer.scrollHeight;
   }
 
+  function clearLogs() {
+    logContainer.innerHTML = '';
+    if (!connected) {
+      logContainer.innerHTML = '<div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#8b949e"><div style="font-size:48px;opacity:.4">📋</div><p>Enter your token and click <strong>Connect</strong> to stream logs</p></div>';
+    }
+    totalCount = 0;
+    updateCounter();
+  }
+
   function updateCounter() {
     counterEl.textContent = `${totalCount} ${totalCount === 1 ? 'entry' : 'entries'}`;
   }
 
-  // Enter key to connect
+  // ─── Keyboard / Scroll ────────────────────────────────────────────────
   tokenInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !connected) connect();
   });
 
-  // Auto-scroll detection — if user scrolls up, disable auto-scroll
   logContainer.addEventListener('scroll', () => {
     const atBottom = logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 40;
     if (!atBottom && autoScroll) {
