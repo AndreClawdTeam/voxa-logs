@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Voxa API — Live Logs</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-muted: #8b949e;
+    --info: #58a6ff;
+    --warn: #e3b341;
+    --error: #f85149;
+    --debug: #8b949e;
+    --trace: #6e7681;
+    --fatal: #ff6e40;
+    --green: #3fb950;
+    --orange: #f0883e;
+    --blue: #58a6ff;
+    --accent: #238636;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SF Mono', Consolas, monospace;
+    font-size: 13px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ─── Header ─────────────────────────────────────────────────────── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--info);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  .status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #21262d;
+    border: 1px solid var(--border);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .status-badge .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    transition: background 0.3s;
+  }
+  .status-badge.connected .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-badge.disconnected .dot { background: var(--error); }
+
+  /* ─── Controls ───────────────────────────────────────────────────── */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  input[type="password"], input[type="text"] {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 5px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus { border-color: var(--info); }
+
+  button {
+    background: #21262d;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  button:hover { background: #30363d; }
+  button.primary { background: #1f6feb; border-color: #388bfd; color: #fff; }
+  button.primary:hover { background: #388bfd; }
+  button.danger { background: #21262d; border-color: var(--error); color: var(--error); }
+  button.danger:hover { background: #2d1318; }
+  button.active { background: #1f6feb22; border-color: var(--info); color: var(--info); }
+
+  /* ─── Toolbar ─────────────────────────────────────────────────────── */
+  .toolbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 4px;
+  }
+  .filter-btn {
+    padding: 3px 10px;
+    font-size: 11px;
+    border-radius: 4px;
+  }
+  .filter-btn.active-filter { background: #1f6feb22; border-color: var(--info); color: var(--info); }
+
+  .counter {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ─── Log container ─────────────────────────────────────────────── */
+  #log-container {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0;
+    scroll-behavior: smooth;
+  }
+
+  #log-container::-webkit-scrollbar { width: 8px; }
+  #log-container::-webkit-scrollbar-track { background: var(--bg); }
+  #log-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  #log-container::-webkit-scrollbar-thumb:hover { background: #484f58; }
+
+  /* ─── Log entries ─────────────────────────────────────────────────── */
+  .log-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 4px 20px;
+    border-bottom: 1px solid #161b2244;
+    line-height: 1.5;
+    font-size: 12px;
+    transition: background 0.1s;
+  }
+  .log-entry:hover { background: #161b22; }
+
+  .log-entry.level-error { border-left: 2px solid var(--error); padding-left: 18px; background: #2d13181a; }
+  .log-entry.level-fatal { border-left: 2px solid var(--fatal); padding-left: 18px; background: #2d13181a; }
+  .log-entry.level-warn  { border-left: 2px solid var(--warn);  padding-left: 18px; background: #2d240a1a; }
+
+  .ts {
+    color: var(--text-muted);
+    font-size: 11px;
+    white-space: nowrap;
+    min-width: 80px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    min-width: 42px;
+    text-align: center;
+  }
+  .badge-info  { background: #1f6feb33; color: var(--info); border: 1px solid #1f6feb55; }
+  .badge-warn  { background: #e3b34133; color: var(--warn); border: 1px solid #e3b34155; }
+  .badge-error { background: #f8514933; color: var(--error); border: 1px solid #f8514955; }
+  .badge-fatal { background: #ff6e4033; color: var(--fatal); border: 1px solid #ff6e4055; }
+  .badge-debug { background: #8b949e22; color: var(--debug); border: 1px solid #8b949e44; }
+  .badge-trace { background: #8b949e11; color: var(--trace); border: 1px solid #8b949e33; }
+
+  .http-method {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  .method-GET    { background: #1f6feb22; color: #79c0ff; border: 1px solid #1f6feb44; }
+  .method-POST   { background: #3fb95022; color: #56d364; border: 1px solid #3fb95044; }
+  .method-PUT    { background: #e3b34122; color: #e3b341; border: 1px solid #e3b34144; }
+  .method-PATCH  { background: #a5d6ff22; color: #a5d6ff; border: 1px solid #a5d6ff44; }
+  .method-DELETE { background: #f8514922; color: var(--error); border: 1px solid #f8514944; }
+
+  .url { color: #a5d6ff; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .status-code {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .status-2xx { background: #3fb95022; color: var(--green); border: 1px solid #3fb95044; }
+  .status-3xx { background: #1f6feb22; color: var(--blue); border: 1px solid #1f6feb44; }
+  .status-4xx { background: #f0883e22; color: var(--orange); border: 1px solid #f0883e44; }
+  .status-5xx { background: #f8514922; color: var(--error); border: 1px solid #f8514944; }
+
+  .resp-time { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .resp-time.slow { color: var(--warn); }
+  .resp-time.very-slow { color: var(--error); }
+
+  .msg { color: var(--text); flex: 1; word-break: break-word; }
+  .msg.raw { color: var(--text-muted); font-style: italic; }
+  .msg.system { color: var(--green); }
+
+  /* ─── Empty state ─────────────────────────────────────────────────── */
+  #empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+    color: var(--text-muted);
+  }
+  #empty-state .icon { font-size: 48px; opacity: 0.4; }
+  #empty-state p { font-size: 14px; }
+  #empty-state small { font-size: 11px; opacity: 0.7; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">⚡ Voxa API — Live Logs</div>
+  <div class="status-badge disconnected" id="status-badge">
+    <div class="dot"></div>
+    <span id="status-text">Disconnected</span>
+  </div>
+  <div class="controls">
+    <input type="password" id="token-input" placeholder="Access token..." autocomplete="off" />
+    <button class="primary" id="connect-btn" onclick="toggleConnect()">Connect</button>
+    <button onclick="clearLogs()">Clear</button>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="filter-group">
+    <button class="filter-btn active-filter" data-filter="all" onclick="setFilter('all')">All</button>
+    <button class="filter-btn" data-filter="info" onclick="setFilter('info')">Info</button>
+    <button class="filter-btn" data-filter="warn" onclick="setFilter('warn')">Warn</button>
+    <button class="filter-btn" data-filter="error" onclick="setFilter('error')">Error</button>
+    <button class="filter-btn" data-filter="debug" onclick="setFilter('debug')">Debug</button>
+  </div>
+  <button class="filter-btn" id="autoscroll-btn" onclick="toggleAutoScroll()">↓ Auto-scroll ON</button>
+  <div class="counter" id="counter">0 entries</div>
+</div>
+
+<div id="log-container">
+  <div id="empty-state">
+    <div class="icon">📋</div>
+    <p>Enter your token and click <strong>Connect</strong> to stream logs</p>
+    <small>Streaming Voxa API (Pino JSON) via Server-Sent Events</small>
+  </div>
+</div>
+
+<script>
+  // ─── State ────────────────────────────────────────────────────────────
+  let evtSource = null;
+  let autoScroll = true;
+  let currentFilter = 'all';
+  let totalCount = 0;
+  let reconnectDelay = 1000;
+  let reconnectTimer = null;
+  let connected = false;
+
+  // ─── Init ──────────────────────────────────────────────────────────────
+  const tokenInput = document.getElementById('token-input');
+  const connectBtn = document.getElementById('connect-btn');
+  const logContainer = document.getElementById('log-container');
+  const emptyState = document.getElementById('empty-state');
+  const statusBadge = document.getElementById('status-badge');
+  const statusText = document.getElementById('status-text');
+  const counterEl = document.getElementById('counter');
+
+  // Load saved token
+  const savedToken = localStorage.getItem('voxa-logs-token');
+  if (savedToken) tokenInput.value = savedToken;
+
+  // ─── Connect / Disconnect ─────────────────────────────────────────────
+  function toggleConnect() {
+    if (connected || evtSource) {
+      disconnect(false); // manual disconnect — no reconnect
+    } else {
+      connect();
+    }
+  }
+
+  function connect() {
+    const token = tokenInput.value.trim();
+    if (!token) { alert('Please enter a token'); return; }
+
+    localStorage.setItem('voxa-logs-token', token);
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    evtSource = new EventSource(`/events?token=${encodeURIComponent(token)}`);
+
+    evtSource.onopen = () => {
+      connected = true;
+      reconnectDelay = 1000;
+      clearTimeout(reconnectTimer);
+      setStatus(true);
+      connectBtn.textContent = 'Disconnect';
+      connectBtn.className = 'danger';
+    };
+
+    evtSource.onmessage = (e) => {
+      handleLine(e.data);
+    };
+
+    evtSource.onerror = () => {
+      connected = false;
+      setStatus(false);
+      evtSource.close();
+      evtSource = null;
+      connectBtn.textContent = 'Connect';
+      connectBtn.className = 'primary';
+
+      // Reconnect with backoff
+      const delay = reconnectDelay;
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      statusText.textContent = `Reconnecting in ${delay / 1000}s…`;
+      reconnectTimer = setTimeout(() => {
+        if (!connected) connect();
+      }, delay);
+    };
+  }
+
+  function disconnect(autoReconnect = false) {
+    clearTimeout(reconnectTimer);
+    if (evtSource) { evtSource.close(); evtSource = null; }
+    connected = false;
+    reconnectDelay = 1000;
+    setStatus(false);
+    connectBtn.textContent = 'Connect';
+    connectBtn.className = 'primary';
+    if (!autoReconnect) {
+      appendSystemMsg('— Disconnected —');
+    }
+  }
+
+  function setStatus(isConnected) {
+    if (isConnected) {
+      statusBadge.className = 'status-badge connected';
+      statusText.textContent = 'Connected';
+    } else {
+      statusBadge.className = 'status-badge disconnected';
+      if (!statusText.textContent.startsWith('Reconnect')) {
+        statusText.textContent = 'Disconnected';
+      }
+    }
+  }
+
+  // ─── Log parsing ──────────────────────────────────────────────────────
+  function pinoLevelToStr(level) {
+    if (level <= 10) return 'trace';
+    if (level <= 20) return 'debug';
+    if (level <= 30) return 'info';
+    if (level <= 40) return 'warn';
+    if (level <= 50) return 'error';
+    return 'fatal';
+  }
+
+  function parseLine(raw) {
+    try {
+      const log = JSON.parse(raw);
+      if (log.type === 'connected') {
+        return { type: 'system', msg: log.msg, level: 'info', time: new Date() };
+      }
+      return {
+        type: 'pino',
+        level: pinoLevelToStr(log.level),
+        time: new Date(log.time),
+        msg: log.msg,
+        method: log.req?.method,
+        url: log.req?.url,
+        status: log.res?.statusCode,
+        responseTime: log.responseTime,
+        pid: log.pid,
+        hostname: log.hostname,
+      };
+    } catch {
+      return { type: 'raw', msg: raw, time: new Date(), level: 'info' };
+    }
+  }
+
+  function formatTime(date) {
+    if (!(date instanceof Date) || isNaN(date)) return '--:--:--';
+    return date.toTimeString().slice(0, 8);
+  }
+
+  function statusClass(code) {
+    if (!code) return '';
+    if (code < 300) return 'status-2xx';
+    if (code < 400) return 'status-3xx';
+    if (code < 500) return 'status-4xx';
+    return 'status-5xx';
+  }
+
+  function rtClass(ms) {
+    if (!ms) return '';
+    if (ms > 2000) return 'very-slow';
+    if (ms > 500) return 'slow';
+    return '';
+  }
+
+  // ─── Rendering ────────────────────────────────────────────────────────
+  function handleLine(raw) {
+    const parsed = parseLine(raw);
+    totalCount++;
+    updateCounter();
+    renderEntry(parsed);
+  }
+
+  function renderEntry(parsed) {
+    const entry = document.createElement('div');
+    entry.className = `log-entry level-${parsed.level}`;
+    entry.dataset.level = parsed.level;
+
+    // Apply filter visibility
+    if (currentFilter !== 'all' && parsed.level !== currentFilter) {
+      entry.style.display = 'none';
+    }
+
+    const ts = document.createElement('span');
+    ts.className = 'ts';
+    ts.textContent = formatTime(parsed.time);
+    entry.appendChild(ts);
+
+    if (parsed.type !== 'system') {
+      const badge = document.createElement('span');
+      badge.className = `badge badge-${parsed.level}`;
+      badge.textContent = parsed.level;
+      entry.appendChild(badge);
+    }
+
+    if (parsed.type === 'pino' && parsed.method) {
+      const method = document.createElement('span');
+      method.className = `http-method method-${parsed.method}`;
+      method.textContent = parsed.method;
+      entry.appendChild(method);
+
+      if (parsed.url) {
+        const url = document.createElement('span');
+        url.className = 'url';
+        url.textContent = parsed.url;
+        url.title = parsed.url;
+        entry.appendChild(url);
+      }
+    }
+
+    if (parsed.type === 'pino' && parsed.status) {
+      const sc = document.createElement('span');
+      sc.className = `status-code ${statusClass(parsed.status)}`;
+      sc.textContent = parsed.status;
+      entry.appendChild(sc);
+    }
+
+    if (parsed.type === 'pino' && parsed.responseTime !== undefined) {
+      const rt = document.createElement('span');
+      const ms = Math.round(parsed.responseTime);
+      rt.className = `resp-time ${rtClass(ms)}`;
+      rt.textContent = `${ms}ms`;
+      entry.appendChild(rt);
+    }
+
+    const msg = document.createElement('span');
+    if (parsed.type === 'raw') msg.className = 'msg raw';
+    else if (parsed.type === 'system') msg.className = 'msg system';
+    else msg.className = 'msg';
+    msg.textContent = parsed.msg || '';
+    entry.appendChild(msg);
+
+    logContainer.appendChild(entry);
+
+    if (autoScroll) {
+      logContainer.scrollTop = logContainer.scrollHeight;
+    }
+  }
+
+  function appendSystemMsg(text) {
+    renderEntry({ type: 'system', msg: text, level: 'info', time: new Date() });
+  }
+
+  // ─── Controls ─────────────────────────────────────────────────────────
+  function clearLogs() {
+    logContainer.innerHTML = '';
+    if (!connected) {
+      logContainer.innerHTML = '<div id="empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:16px;color:#8b949e"><div style="font-size:48px;opacity:.4">📋</div><p>Enter your token and click <strong>Connect</strong> to stream logs</p></div>';
+    }
+    totalCount = 0;
+    updateCounter();
+  }
+
+  function setFilter(filter) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn[data-filter]').forEach(btn => {
+      btn.classList.toggle('active-filter', btn.dataset.filter === filter);
+    });
+    // Re-apply visibility to existing entries
+    document.querySelectorAll('.log-entry').forEach(el => {
+      if (filter === 'all' || el.dataset.level === filter) {
+        el.style.display = '';
+      } else {
+        el.style.display = 'none';
+      }
+    });
+  }
+
+  function toggleAutoScroll() {
+    autoScroll = !autoScroll;
+    const btn = document.getElementById('autoscroll-btn');
+    btn.textContent = autoScroll ? '↓ Auto-scroll ON' : '↓ Auto-scroll OFF';
+    btn.classList.toggle('active', autoScroll);
+    if (autoScroll) logContainer.scrollTop = logContainer.scrollHeight;
+  }
+
+  function updateCounter() {
+    counterEl.textContent = `${totalCount} ${totalCount === 1 ? 'entry' : 'entries'}`;
+  }
+
+  // Enter key to connect
+  tokenInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !connected) connect();
+  });
+
+  // Auto-scroll detection — if user scrolls up, disable auto-scroll
+  logContainer.addEventListener('scroll', () => {
+    const atBottom = logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 40;
+    if (!atBottom && autoScroll) {
+      autoScroll = false;
+      document.getElementById('autoscroll-btn').textContent = '↓ Auto-scroll OFF';
+    } else if (atBottom && !autoScroll) {
+      autoScroll = true;
+      document.getElementById('autoscroll-btn').textContent = '↓ Auto-scroll ON';
+    }
+  });
+</script>
+</body>
+</html>
